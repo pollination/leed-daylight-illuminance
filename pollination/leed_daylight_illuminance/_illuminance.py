@@ -1,7 +1,9 @@
 from pollination_dsl.dag import Inputs, DAG, task, Outputs
 from dataclasses import dataclass
 from pollination.honeybee_radiance.octree import CreateOctreeWithSky
+from pollination.honeybee_radiance.translate import CreateRadianceFolderGrid
 from pollination.path.copy import Copy
+from pollination.path.read import ReadJSONList
 
 from ._raytracing import PointInTimeGridRayTracing
 
@@ -12,19 +14,22 @@ class PointInTimeGridEntryPoint(DAG):
 
     # inputs
     model_folder = Inputs.folder(
-        description='Radiance folder for a model.'
+        description='A Honeybee Radiance Model folder.'
     )
 
-    sky = Inputs.str(
-        description='Radiance Sky file for simulation.'
-    )
-
-    sensor_grids = Inputs.list(
-        description='Sensor grids information from the HB model.'
+    sky = Inputs.file(
+        description='Radiance Sky file for simulation.',
+        extensions=['sky']
     )
 
     sensor_grids_file = Inputs.file(
-        description='Information JSON file for exported sensor grids in grids subfolder.'
+        description='JSON file with information about the sensor grids to simulate.',
+        extensions=['json']
+    )
+
+    model_sensor_grids_file = Inputs.file(
+        description='JSON file with information about the sensor grids to simulate.',
+        extensions=['json']
     )
 
     sensor_count = Inputs.int(
@@ -39,8 +44,7 @@ class PointInTimeGridEntryPoint(DAG):
     )
 
     @task(template=Copy)
-    def copy_grids_info(self, src=sensor_grids_file):
-        """Copy the sensor grids info to the result folder."""
+    def copy_sensor_grid_info(self, src=model_sensor_grids_file):
         return [
             {
                 'from': Copy()._outputs.dst,
@@ -48,10 +52,17 @@ class PointInTimeGridEntryPoint(DAG):
             }
         ]
 
+    @task(template=ReadJSONList)
+    def read_sensor_grid_info(self, src=sensor_grids_file):
+        return [
+            {
+                'from': ReadJSONList()._outputs.data,
+                'description': 'Sensor grids information.'
+            }
+        ]
+
     @task(template=CreateOctreeWithSky)
-    def create_octree(
-        self, model=model_folder, sky=sky
-    ):
+    def create_octree(self, model=model_folder, sky=sky):
         """Create octree from radiance folder and sky."""
         return [
             {
@@ -62,8 +73,8 @@ class PointInTimeGridEntryPoint(DAG):
 
     @task(
         template=PointInTimeGridRayTracing,
-        needs=[create_octree],
-        loop=sensor_grids,
+        needs=[read_sensor_grid_info, create_octree],
+        loop=read_sensor_grid_info._outputs.data,
         sub_folder='initial_results/{{item.name}}',  # create a subfolder for each grid
         sub_paths={'sensor_grid': 'grid/{{item.full_id}}.pts'}  # subpath for sensor_grid
     )
@@ -77,10 +88,5 @@ class PointInTimeGridEntryPoint(DAG):
         sensor_grid=model_folder
     ):
         # this task doesn't return a file for each loop.
-        # instead we access the results folder directly as an output
+        # instead we access the results folder as a separate task
         pass
-
-    results = Outputs.folder(
-        source='results', description='Folder with raw result files (.res) that contain '
-        'numerical values for each sensor. Values are in lux.'
-    )

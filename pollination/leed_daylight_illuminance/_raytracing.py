@@ -1,6 +1,6 @@
 """Raytracing DAG for point-in-time grid-based."""
 
-from pollination_dsl.dag import Inputs, DAG, task
+from pollination_dsl.dag import Inputs, DAG, task, Outputs
 from dataclasses import dataclass
 
 from pollination.honeybee_radiance.grid import SplitGrid, MergeFiles

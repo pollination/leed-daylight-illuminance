@@ -72,7 +72,22 @@ class LeedDaylightIlluminanceEntryPoint(DAG):
         return [
             {
                 'from': Copy()._outputs.dst,
-                'to': 'ill_results/model.hbjson'
+                'to': 'simulation/model.hbjson'
+            }
+        ]
+
+    @task(template=CreateRadianceFolderGrid)
+    def create_rad_folder(self, input_model=model, grid_filter=grid_filter):
+        """Translate the input model to a radiance folder."""
+        return [
+            {'from': CreateRadianceFolderGrid()._outputs.model_folder, 'to': 'model'},
+            {
+                'from': CreateRadianceFolderGrid()._outputs.model_sensor_grids_file,
+                'to': 'grids_info.json'
+            },
+            {
+                'from': CreateRadianceFolderGrid()._outputs.sensor_grids_file,
+                'to': '_grids_info.json'
             }
         ]
 
@@ -83,85 +98,67 @@ class LeedDaylightIlluminanceEntryPoint(DAG):
             {'from': CreateLeedSkies()._outputs.output_folder, 'to': 'skies'}
         ]
 
-    @task(template=CreateRadianceFolderGrid)
-    def create_rad_folder(
-        self, input_model=model, grid_filter=grid_filter
-            ):
-        """Translate the input model to a radiance folder."""
-        return [
-            {'from': CreateRadianceFolderGrid()._outputs.model_folder, 'to': 'model'},
-            {
-                'from': CreateRadianceFolderGrid()._outputs.model_sensor_grids_file,
-                'to': 'grids_info.json'
-            },
-            {
-                'from': CreateRadianceFolderGrid()._outputs.model_sensor_grids,
-                'description': 'Sensor grids information.'
-            }
-        ]
-
     @task(
         template=PointInTimeGridEntryPoint,
-        needs=[create_skies, create_rad_folder],
+        needs=[create_rad_folder, create_skies],
         loop=create_skies._outputs.sky_list,
-        sub_folder='simulation',
-        sub_paths={'sky': 'skies/{{item.path}}'}
+        sub_folder='simulation/{{item.id}}',
+        sub_paths={'sky': '{{item.path}}'}
     )
     def illuminance_simulation(
-        self, model_folder=create_rad_folder._outputs.model_folder,
+        self,
+        model_folder=create_rad_folder._outputs.model_folder,
         sky=create_skies._outputs.output_folder,
-        sensor_grids=create_rad_folder._outputs.model_sensor_grids,
-        sensor_grids_file=create_rad_folder._outputs.model_sensor_grids_file,
+        sensor_grids_file=create_rad_folder._outputs.sensor_grids_file,
+        model_sensor_grids_file=create_rad_folder._outputs.model_sensor_grids_file,
+        grid_filter=grid_filter,
         sensor_count=sensor_count,
         radiance_parameters=radiance_parameters
     ):
-        return [
-            {
-                'from': PointInTimeGridEntryPoint()._outputs.results,
-                'to': 'ill_results/{{item.id}}'
-            }
-        ]
+        # this task doesn't return a folder for each loop.
+        # instead we access the results folder as a separate task
+        pass
 
     @task(
         template=LeedIlluminanceCredits, needs=[copy_model, illuminance_simulation]
     )
-    def merge_results(
-        self, folder='ill_results', glare_control_devices=glare_control_devices
+    def evaluate_credits(
+        self, folder='simulation', glare_control_devices=glare_control_devices
     ):
         return [
             {
                 'from': LeedIlluminanceCredits()._outputs.pass_fail_results,
-                'to': 'pass_fail_results'
+                'to': 'results'
             },
             {
                 'from': LeedIlluminanceCredits()._outputs.credit_summary,
-                'to': 'credit_summary'
+                'to': 'credit_summary.json'
             }
         ]
 
     illuminance_9am = Outputs.folder(
-        source='ill_results/9AM',
+        source='simulation/9AM/results',
         description='Illuminance results for the 9AM simulation in lux.'
     )
 
     illuminance_3pm = Outputs.folder(
-        source='ill_results/3PM',
+        source='simulation/3PM/results',
         description='Illuminance results for the 3PM simulation in lux.'
     )
 
     pass_fail_9am = Outputs.folder(
         description='Pass/Fail results for the 9AM simulation as one/zero values.',
-        source='pass_fail_results/9AM'
+        source='results/9AM'
     )
 
     pass_fail_3pm = Outputs.folder(
         description='Pass/Fail results for the 3PM simulation as one/zero values.',
-        source='pass_fail_results/3PM'
+        source='results/3PM'
     )
 
     pass_fail_combined = Outputs.folder(
         description='Pass/Fail results for the combined simulation as one/zero values.',
-        source='pass_fail_results/combined'
+        source='results/combined'
     )
 
     credit_summary = Outputs.folder(
