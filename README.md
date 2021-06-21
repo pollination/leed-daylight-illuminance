@@ -9,4 +9,4 @@ of occupied floor area that pass vs. fail the LEED criteria. Otherwise, all sens
 will be assumed to represent an equal amount of floor area.
 
 The input .wea file that is used to generate the clear skies must be for an annual
-Typical Meteorological Year (TMY) with a timestep of 1.
+Typical Meteorological Year (TMY) with a time step of 1.
