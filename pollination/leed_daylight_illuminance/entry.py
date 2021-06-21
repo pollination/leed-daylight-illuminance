@@ -1,6 +1,7 @@
 from pollination_dsl.dag import Inputs, DAG, task, Outputs
 from dataclasses import dataclass
 from pollination.honeybee_radiance.sky import CreateLeedSkies
+from pollination.honeybee_radiance.translate import CreateRadianceFolderGrid
 from pollination.honeybee_radiance.post_process import LeedIlluminanceCredits
 from pollination.path.copy import Copy
 
@@ -66,13 +67,6 @@ class LeedDaylightIlluminanceEntryPoint(DAG):
         default='-ab 5 -aa 0.1 -ad 2048 -ar 64',
     )
 
-    @task(template=CreateLeedSkies)
-    def create_skies(self, wea=wea, north=north):
-        return [
-            {'from': CreateLeedSkies()._outputs.sky_list},
-            {'from': CreateLeedSkies()._outputs.output_folder, 'to': 'skies'}
-        ]
-
     @task(template=Copy)
     def copy_model(self, src=model):
         return [
@@ -82,22 +76,49 @@ class LeedDaylightIlluminanceEntryPoint(DAG):
             }
         ]
 
+    @task(template=CreateLeedSkies)
+    def create_skies(self, wea=wea, north=north):
+        return [
+            {'from': CreateLeedSkies()._outputs.sky_list},
+            {'from': CreateLeedSkies()._outputs.output_folder, 'to': 'skies'}
+        ]
+
+    @task(template=CreateRadianceFolderGrid)
+    def create_rad_folder(
+        self, input_model=model, grid_filter=grid_filter
+            ):
+        """Translate the input model to a radiance folder."""
+        return [
+            {'from': CreateRadianceFolderGrid()._outputs.model_folder, 'to': 'model'},
+            {
+                'from': CreateRadianceFolderGrid()._outputs.model_sensor_grids_file,
+                'to': 'grids_info.json'
+            },
+            {
+                'from': CreateRadianceFolderGrid()._outputs.model_sensor_grids,
+                'description': 'Sensor grids information.'
+            }
+        ]
+
     @task(
         template=PointInTimeGridEntryPoint,
-        needs=[create_skies],
+        needs=[create_skies, create_rad_folder],
         loop=create_skies._outputs.sky_list,
         sub_folder='simulation',
-        sub_paths={'sky': '{{item.path}}'}
+        sub_paths={'sky': 'skies/{{item.path}}'}
     )
     def illuminance_simulation(
-        self, model=model, sky=create_skies._outputs.output_folder,
-        grid_filter=grid_filter, sensor_count=sensor_count,
-        radiance_parameters=radiance_parameters, metric='illuminance'
+        self, model_folder=create_rad_folder._outputs.model_folder,
+        sky=create_skies._outputs.output_folder,
+        sensor_grids=create_rad_folder._outputs.model_sensor_grids,
+        sensor_grids_file=create_rad_folder._outputs.model_sensor_grids_file,
+        sensor_count=sensor_count,
+        radiance_parameters=radiance_parameters
     ):
         return [
             {
                 'from': PointInTimeGridEntryPoint()._outputs.results,
-                'to': 'ill_results/{{item.path}}'
+                'to': 'ill_results/{{item.id}}'
             }
         ]
 
