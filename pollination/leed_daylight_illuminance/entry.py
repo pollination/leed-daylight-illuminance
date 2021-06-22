@@ -12,6 +12,11 @@ from pollination.alias.inputs.model import hbjson_model_input
 from pollination.alias.inputs.wea import wea_input
 from pollination.alias.inputs.north import north_input
 from pollination.alias.inputs.grid import sensor_count_input, grid_filter_input
+from pollination.alias.inputs.bool_options import glare_control_devices_input
+from pollination.alias.inputs.radiancepar import rad_par_leed_illuminance_input
+from pollination.alias.outputs.daylight import illuminance_9am_results, \
+    illuminance_3pm_results, pass_fail_9am_results, pass_fail_3pm_results, \
+    pass_fail_comb_results, leed_ill_credit_summary_results
 
 
 @dataclass
@@ -36,7 +41,8 @@ class LeedDaylightIlluminanceEntryPoint(DAG):
         '(with manual override) glare-control devices," which means that illuminance '
         'only needs to be above 300 lux and not between 300 and 3000 lux.',
         default='glare-control',
-        spec={'type': 'string', 'enum': ['glare-control', 'no-glare-control']}
+        spec={'type': 'string', 'enum': ['glare-control', 'no-glare-control']},
+        alias=glare_control_devices_input
     )
 
     north = Inputs.float(
@@ -65,6 +71,7 @@ class LeedDaylightIlluminanceEntryPoint(DAG):
     radiance_parameters = Inputs.str(
         description='The radiance parameters for ray tracing',
         default='-ab 5 -aa 0.1 -ad 2048 -ar 64',
+        alias=rad_par_leed_illuminance_input
     )
 
     @task(template=Copy)
@@ -138,31 +145,37 @@ class LeedDaylightIlluminanceEntryPoint(DAG):
 
     illuminance_9am = Outputs.folder(
         source='simulation/9AM/results',
-        description='Illuminance results for the 9AM simulation in lux.'
+        description='Illuminance results for the 9AM simulation in lux.',
+        alias=illuminance_9am_results
     )
 
     illuminance_3pm = Outputs.folder(
         source='simulation/3PM/results',
-        description='Illuminance results for the 3PM simulation in lux.'
+        description='Illuminance results for the 3PM simulation in lux.',
+        alias=illuminance_3pm_results
     )
 
     pass_fail_9am = Outputs.folder(
         description='Pass/Fail results for the 9AM simulation as one/zero values.',
-        source='results/9AM'
+        source='results/9AM',
+        alias=pass_fail_9am_results
     )
 
     pass_fail_3pm = Outputs.folder(
         description='Pass/Fail results for the 3PM simulation as one/zero values.',
-        source='results/3PM'
+        source='results/3PM',
+        alias=pass_fail_3pm_results
     )
 
     pass_fail_combined = Outputs.folder(
         description='Pass/Fail results for the combined simulation as one/zero values.',
-        source='results/combined'
+        source='results/combined',
+        alias=pass_fail_comb_results
     )
 
     credit_summary = Outputs.folder(
         description='JSON file containing the number of LEED credits achieved and '
         'a summary of the percentage of the sensor grid area that meets the criteria.',
-        source='credit_summary.json'
+        source='credit_summary.json',
+        alias=leed_ill_credit_summary_results
     )
