@@ -1,7 +1,6 @@
-from pollination_dsl.dag import Inputs, DAG, task, Outputs
+from pollination_dsl.dag import Inputs, DAG, task
 from dataclasses import dataclass
 from pollination.honeybee_radiance.octree import CreateOctreeWithSky
-from pollination.honeybee_radiance.translate import CreateRadianceFolderGrid
 from pollination.path.copy import Copy
 from pollination.path.read import ReadJSONList
 
@@ -41,6 +40,10 @@ class PointInTimeGridEntryPoint(DAG):
     radiance_parameters = Inputs.str(
         description='The radiance parameters for ray tracing',
         default='-ab 2 -aa 0.1 -ad 2048 -ar 64'
+    )
+
+    bsdfs = Inputs.folder(
+        description='Folder containing any BSDF files needed for ray tracing.'
     )
 
     @task(template=Copy)
@@ -85,7 +88,8 @@ class PointInTimeGridEntryPoint(DAG):
         metric='illuminance',
         octree_file=create_octree._outputs.scene_file,
         grid_name='{{item.full_id}}',
-        sensor_grid=model_folder
+        sensor_grid=model_folder,
+        bsdfs=bsdfs
     ):
         # this task doesn't return a file for each loop.
         # instead we access the results folder as a separate task

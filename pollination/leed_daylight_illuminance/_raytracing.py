@@ -1,6 +1,6 @@
 """Raytracing DAG for point-in-time grid-based."""
 
-from pollination_dsl.dag import Inputs, DAG, task, Outputs
+from pollination_dsl.dag import Inputs, DAG, task
 from dataclasses import dataclass
 
 from pollination.honeybee_radiance.grid import SplitGrid, MergeFiles
@@ -46,6 +46,10 @@ class PointInTimeGridRayTracing(DAG):
         extensions=['pts']
     )
 
+    bsdfs = Inputs.folder(
+        description='Folder containing any BSDF files needed for ray tracing.'
+    )
+
     @task(template=SplitGrid)
     def split_grid(self, sensor_count=sensor_count, input_grid=sensor_grid):
         return [
@@ -62,7 +66,8 @@ class PointInTimeGridRayTracing(DAG):
     )
     def ray_tracing(
         self, radiance_parameters=radiance_parameters, metric=metric,
-        grid=split_grid._outputs.output_folder, scene_file=octree_file
+        grid=split_grid._outputs.output_folder, scene_file=octree_file,
+        bsdf_folder=bsdfs
     ):
         return [
             {
