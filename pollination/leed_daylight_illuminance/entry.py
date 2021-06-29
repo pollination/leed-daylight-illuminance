@@ -87,7 +87,14 @@ class LeedDaylightIlluminanceEntryPoint(DAG):
     def create_rad_folder(self, input_model=model, grid_filter=grid_filter):
         """Translate the input model to a radiance folder."""
         return [
-            {'from': CreateRadianceFolderGrid()._outputs.model_folder, 'to': 'model'},
+            {
+                'from': CreateRadianceFolderGrid()._outputs.model_folder,
+                'to': 'model'
+            },
+            {
+                'from': CreateRadianceFolderGrid()._outputs.bsdf_folder,
+                'to': 'model/bsdf'
+            },
             {
                 'from': CreateRadianceFolderGrid()._outputs.model_sensor_grids_file,
                 'to': 'grids_info.json'
@@ -120,7 +127,8 @@ class LeedDaylightIlluminanceEntryPoint(DAG):
         model_sensor_grids_file=create_rad_folder._outputs.model_sensor_grids_file,
         grid_filter=grid_filter,
         sensor_count=sensor_count,
-        radiance_parameters=radiance_parameters
+        radiance_parameters=radiance_parameters,
+        bsdfs=create_rad_folder._outputs.bsdf_folder
     ):
         # this task doesn't return a folder for each loop.
         # instead we access the results folder as a separate task
