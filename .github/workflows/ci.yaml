@@ -69,6 +69,10 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: 3.7
+      - name: Get Job Context
+        id: get-context
+        run: |
+          echo "::set-output name=tag::$(git describe --tags | sed 's/v//')"
       - name: install python dependencies
         run: |
           pip install .
@@ -76,7 +80,7 @@ jobs:
       - name: deploy to production
         run: |
           queenbee
-          pollination dsl push pollination-leed-daylight-illuminance -e https://api.pollination.cloud -src https://api.pollination.cloud/registries --private
+          pollination dsl push pollination-leed-daylight-illuminance --tag ${{steps.get-context.outputs.tag}} -e https://api.pollination.cloud -src https://api.pollination.cloud/registries --private
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           QB_POLLINATION_TOKEN: ${{ secrets.POLLINATION_LADYBUGBOT_TOKEN }}
