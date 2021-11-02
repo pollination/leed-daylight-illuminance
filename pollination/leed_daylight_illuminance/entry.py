@@ -11,7 +11,8 @@ from ._illuminance import PointInTimeGridEntryPoint
 from pollination.alias.inputs.model import hbjson_model_input
 from pollination.alias.inputs.wea import wea_input
 from pollination.alias.inputs.north import north_input
-from pollination.alias.inputs.grid import sensor_count_input, grid_filter_input
+from pollination.alias.inputs.grid import grid_filter_input, \
+    min_sensor_count_input, cpu_count
 from pollination.alias.inputs.bool_options import glare_control_devices_input
 from pollination.alias.inputs.radiancepar import rad_par_leed_illuminance_input
 from pollination.alias.outputs.daylight import illuminance_9am_results, \
@@ -53,7 +54,7 @@ class LeedDaylightIlluminanceEntryPoint(DAG):
     )
 
     grid_filter = Inputs.str(
-        description='Text for a grid identifer or a pattern to filter the sensor grids '
+        description='Text for a grid identifier or a pattern to filter the sensor grids '
         'of the model that are simulated. For instance, first_floor_* will simulate '
         'only the sensor grids that have an identifier that starts with '
         'first_floor_. By default, all grids in the model will be simulated.',
@@ -61,11 +62,23 @@ class LeedDaylightIlluminanceEntryPoint(DAG):
         alias=grid_filter_input
     )
 
-    sensor_count = Inputs.int(
-        default=100,
-        description='The maximum number of grid points per parallel execution.',
+    cpu_count = Inputs.int(
+        default=50,
+        description='The maximum number of CPUs for parallel execution. This will be '
+        'used to determine the number of sensors run by each worker.',
         spec={'type': 'integer', 'minimum': 1},
-        alias=sensor_count_input
+        alias=cpu_count
+    )
+
+    min_sensor_count = Inputs.int(
+        description='The minimum number of sensors in each sensor grid after '
+        'redistributing the sensors based on cpu_count. This value takes '
+        'precedence over the cpu_count and can be used to ensure that '
+        'the parallelization does not result in generating unnecessarily small '
+        'sensor grids. The default value is set to 1, which means that the '
+        'cpu_count is always respected.', default=1,
+        spec={'type': 'integer', 'minimum': 1},
+        alias=min_sensor_count_input
     )
 
     radiance_parameters = Inputs.str(
@@ -126,7 +139,8 @@ class LeedDaylightIlluminanceEntryPoint(DAG):
         sensor_grids_file=create_rad_folder._outputs.sensor_grids_file,
         model_sensor_grids_file=create_rad_folder._outputs.model_sensor_grids_file,
         grid_filter=grid_filter,
-        sensor_count=sensor_count,
+        cpu_count=cpu_count,
+        min_sensor_count=min_sensor_count,
         radiance_parameters=radiance_parameters,
         bsdfs=create_rad_folder._outputs.bsdf_folder
     ):
@@ -179,6 +193,12 @@ class LeedDaylightIlluminanceEntryPoint(DAG):
         description='Pass/Fail results for the combined simulation as one/zero values.',
         source='results/combined',
         alias=pass_fail_comb_results
+    )
+
+    space_summary = Outputs.folder(
+        description='CSV file containing the percentage of the sensor grid area in '
+        'each space that meets the criteria.',
+        source='results/space_summary.csv'
     )
 
     credit_summary = Outputs.folder(
