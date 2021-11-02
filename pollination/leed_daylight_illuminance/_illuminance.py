@@ -1,10 +1,10 @@
 from pollination_dsl.dag import Inputs, DAG, task
 from dataclasses import dataclass
 from pollination.honeybee_radiance.octree import CreateOctreeWithSky
+from pollination.honeybee_radiance.grid import SplitGridFolder, MergeFolderData
+from pollination.honeybee_radiance.raytrace import RayTracingPointInTime
 from pollination.path.copy import Copy
 from pollination.path.read import ReadJSONList
-
-from ._raytracing import PointInTimeGridRayTracing
 
 
 @dataclass
@@ -31,9 +31,16 @@ class PointInTimeGridEntryPoint(DAG):
         extensions=['json']
     )
 
-    sensor_count = Inputs.int(
-        default=200,
-        description='The maximum number of grid points per parallel execution',
+    cpu_count = Inputs.int(
+        default=50,
+        description='The maximum number of CPUs for parallel execution. This will be '
+        'used to determine the number of sensors run by each worker.',
+        spec={'type': 'integer', 'minimum': 1}
+    )
+
+    min_sensor_count = Inputs.int(
+        description='The minimum number of sensors in each sensor grid after '
+        'redistributing the sensors based on cpu_count.', default=1,
         spec={'type': 'integer', 'minimum': 1}
     )
 
@@ -76,22 +83,59 @@ class PointInTimeGridEntryPoint(DAG):
         ]
 
     @task(
-        template=PointInTimeGridRayTracing,
-        needs=[read_sensor_grid_info, create_octree],
-        loop=read_sensor_grid_info._outputs.data,
-        sub_folder='initial_results/{{item.name}}',  # create a subfolder for each grid
-        sub_paths={'sensor_grid': 'grid/{{item.full_id}}.pts'}  # subpath for sensor_grid
+        template=SplitGridFolder,
+        sub_paths={'input_folder': 'grid'}
+    )
+    def split_grid_folder(
+        self, input_folder=model_folder,
+        cpu_count=cpu_count, cpus_per_grid=2, min_sensor_count=min_sensor_count
+    ):
+        """Split sensor grid folder based on the number of CPUs"""
+        return [
+            {
+                'from': SplitGridFolder()._outputs.output_folder,
+                'to': 'resources/grid'
+            },
+            {
+                'from': SplitGridFolder()._outputs.dist_info,
+                'to': 'initial_results/_redist_info.json'
+            },
+            {
+                'from': SplitGridFolder()._outputs.sensor_grids,
+                'description': 'Sensor grids information.'
+            }
+        ]
+
+    @task(
+        template=RayTracingPointInTime,
+        needs=[read_sensor_grid_info, create_octree, split_grid_folder],
+        loop=split_grid_folder._outputs.sensor_grids,
+        sub_folder='initial_results/{{item.full_id}}',  # subfolder for each grid
+        sub_paths={'grid': '{{item.full_id}}.pts'}  # subpath for sensor_grid
     )
     def point_in_time_grid_ray_tracing(
         self,
-        sensor_count=sensor_count,
         radiance_parameters=radiance_parameters,
         metric='illuminance',
-        octree_file=create_octree._outputs.scene_file,
-        grid_name='{{item.full_id}}',
-        sensor_grid=model_folder,
-        bsdfs=bsdfs
+        scene_file=create_octree._outputs.scene_file,
+        grid=split_grid_folder._outputs.output_folder,
+        bsdf_folder=bsdfs
     ):
-        # this task doesn't return a file for each loop.
-        # instead we access the results folder as a separate task
-        pass
+        return [
+            {
+                'from': RayTracingPointInTime()._outputs.result,
+                'to': '../{{item.name}}.res'
+            }
+        ]
+
+    @task(
+        template=MergeFolderData,
+        needs=[point_in_time_grid_ray_tracing]
+    )
+    def restructure_results(self, input_folder='initial_results', extension='res'):
+        return [
+            {
+                'from': MergeFolderData()._outputs.output_folder,
+                'to': 'results'
+            }
+        ]
