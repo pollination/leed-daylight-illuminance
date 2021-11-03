@@ -195,13 +195,13 @@ class LeedDaylightIlluminanceEntryPoint(DAG):
         alias=pass_fail_comb_results
     )
 
-    space_summary = Outputs.folder(
+    space_summary = Outputs.file(
         description='CSV file containing the percentage of the sensor grid area in '
         'each space that meets the criteria.',
         source='results/space_summary.csv'
     )
 
-    credit_summary = Outputs.folder(
+    credit_summary = Outputs.file(
         description='JSON file containing the number of LEED credits achieved and '
         'a summary of the percentage of the sensor grid area that meets the criteria.',
         source='credit_summary.json',
