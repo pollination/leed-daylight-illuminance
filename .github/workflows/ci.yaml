@@ -54,7 +54,7 @@ jobs:
       - name: deploy to staging
         run: |
           queenbee
-          pollination dsl push pollination-leed-daylight-illuminance --tag ${{needs.deploy.outputs.tag}} -e https://api.staging.pollination.cloud -src https://api.staging.pollination.cloud/registries --private
+          pollination dsl push pollination-leed-daylight-illuminance --tag ${{needs.deploy.outputs.tag}} -e https://api.staging.pollination.cloud -src https://api.staging.pollination.cloud/registries --private --push-dependencies
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           QB_POLLINATION_TOKEN: ${{ secrets.POLLINATION_STAGING_LADYBUGBOT_TOKEN }}
@@ -84,7 +84,7 @@ jobs:
       - name: deploy to production
         run: |
           queenbee
-          pollination dsl push pollination-leed-daylight-illuminance --tag ${{steps.get-context.outputs.tag}} -e https://api.pollination.cloud -src https://api.pollination.cloud/registries --private
+          pollination dsl push pollination-leed-daylight-illuminance --tag ${{steps.get-context.outputs.tag}} -e https://api.pollination.cloud -src https://api.pollination.cloud/registries --private --push-dependencies
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           QB_POLLINATION_TOKEN: ${{ secrets.POLLINATION_LADYBUGBOT_TOKEN }}
