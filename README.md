@@ -1,4 +1,4 @@
-# leed-daylight-illuminance
+# leed-daylight-option-two
 
 Evaluate LEED daylight credits using the point-in-time illuminance method (Option 2).
 
