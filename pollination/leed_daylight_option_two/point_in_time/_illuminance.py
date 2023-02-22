@@ -4,7 +4,6 @@ from pollination.honeybee_radiance.octree import CreateOctreeWithSky
 from pollination.honeybee_radiance.grid import SplitGridFolder, MergeFolderData
 from pollination.honeybee_radiance.raytrace import RayTracingPointInTime
 from pollination.path.copy import Copy
-from pollination.path.read import ReadJSONList
 
 
 @dataclass
@@ -22,11 +21,6 @@ class PointInTimeGridEntryPoint(DAG):
     )
 
     sensor_grids_file = Inputs.file(
-        description='JSON file with information about the sensor grids to simulate.',
-        extensions=['json']
-    )
-
-    model_sensor_grids_file = Inputs.file(
         description='JSON file with information about the sensor grids to simulate.',
         extensions=['json']
     )
@@ -55,20 +49,11 @@ class PointInTimeGridEntryPoint(DAG):
     )
 
     @task(template=Copy)
-    def copy_sensor_grid_info(self, src=model_sensor_grids_file):
+    def copy_sensor_grid_info(self, src=sensor_grids_file):
         return [
             {
                 'from': Copy()._outputs.dst,
                 'to': 'results/grids_info.json'
-            }
-        ]
-
-    @task(template=ReadJSONList)
-    def read_sensor_grid_info(self, src=sensor_grids_file):
-        return [
-            {
-                'from': ReadJSONList()._outputs.data,
-                'description': 'Sensor grids information.'
             }
         ]
 
@@ -108,7 +93,7 @@ class PointInTimeGridEntryPoint(DAG):
 
     @task(
         template=RayTracingPointInTime,
-        needs=[read_sensor_grid_info, create_octree, split_grid_folder],
+        needs=[create_octree, split_grid_folder],
         loop=split_grid_folder._outputs.sensor_grids,
         sub_folder='initial_results/{{item.full_id}}',  # subfolder for each grid
         sub_paths={'grid': '{{item.full_id}}.pts'}  # subpath for sensor_grid
@@ -132,7 +117,10 @@ class PointInTimeGridEntryPoint(DAG):
         template=MergeFolderData,
         needs=[point_in_time_grid_ray_tracing]
     )
-    def restructure_results(self, input_folder='initial_results', extension='res'):
+    def restructure_results(
+        self, input_folder='initial_results',
+        extension='res'
+    ):
         return [
             {
                 'from': MergeFolderData()._outputs.output_folder,

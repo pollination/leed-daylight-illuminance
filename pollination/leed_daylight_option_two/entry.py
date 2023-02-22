@@ -1,11 +1,6 @@
 from pollination_dsl.dag import Inputs, DAG, task, Outputs
 from dataclasses import dataclass
-from pollination.honeybee_radiance.sky import CreateLeedSkies
-from pollination.honeybee_radiance.translate import CreateRadianceFolderGrid
 from pollination.honeybee_radiance.post_process import LeedIlluminanceCredits
-from pollination.path.copy import Copy
-
-from ._illuminance import PointInTimeGridEntryPoint
 
 # input/output alias
 from pollination.alias.inputs.model import hbjson_model_input
@@ -19,9 +14,12 @@ from pollination.alias.outputs.daylight import illuminance_9am_results, \
     illuminance_3pm_results, pass_fail_9am_results, pass_fail_3pm_results, \
     pass_fail_comb_results, leed_ill_credit_summary_results
 
+from .point_in_time._illuminance import PointInTimeGridEntryPoint
+from ._prepare_folder import LeedDaylightOptionTwoPrepareFolder
+
 
 @dataclass
-class LeedDaylightIlluminanceEntryPoint(DAG):
+class LeedDaylightOptionTwoEntryPoint(DAG):
     """LEED Daylight Illuminance entry point."""
 
     # inputs
@@ -75,8 +73,7 @@ class LeedDaylightIlluminanceEntryPoint(DAG):
         'redistributing the sensors based on cpu_count. This value takes '
         'precedence over the cpu_count and can be used to ensure that '
         'the parallelization does not result in generating unnecessarily small '
-        'sensor grids. The default value is set to 1, which means that the '
-        'cpu_count is always respected.', default=1,
+        'sensor grids. The default value is set to 500.', default=500,
         spec={'type': 'integer', 'minimum': 1},
         alias=min_sensor_count_input
     )
@@ -87,72 +84,60 @@ class LeedDaylightIlluminanceEntryPoint(DAG):
         alias=rad_par_leed_illuminance_input
     )
 
-    @task(template=Copy)
-    def copy_model(self, src=model):
+    @task(template=LeedDaylightOptionTwoPrepareFolder)
+    def prepare_folder(
+        self, model=model, wea=wea, grid_filter=grid_filter, north=north
+        ):
         return [
             {
-                'from': Copy()._outputs.dst,
-                'to': 'simulation/model.hbjson'
-            }
-        ]
-
-    @task(template=CreateRadianceFolderGrid)
-    def create_rad_folder(self, input_model=model, grid_filter=grid_filter):
-        """Translate the input model to a radiance folder."""
-        return [
+                'from': LeedDaylightOptionTwoPrepareFolder()._outputs.sky_list
+            },
             {
-                'from': CreateRadianceFolderGrid()._outputs.model_folder,
+                'from': LeedDaylightOptionTwoPrepareFolder()._outputs.model_folder,
                 'to': 'model'
             },
             {
-                'from': CreateRadianceFolderGrid()._outputs.bsdf_folder,
-                'to': 'model/bsdf'
+                'from': LeedDaylightOptionTwoPrepareFolder()._outputs.resources,
+                'to': 'resources'
             },
             {
-                'from': CreateRadianceFolderGrid()._outputs.model_sensor_grids_file,
-                'to': 'grids_info.json'
-            },
-            {
-                'from': CreateRadianceFolderGrid()._outputs.sensor_grids_file,
-                'to': '_grids_info.json'
+                'from': LeedDaylightOptionTwoPrepareFolder()._outputs.simulation,
+                'to': 'simulation'
             }
-        ]
-
-    @task(template=CreateLeedSkies)
-    def create_skies(self, wea=wea, north=north):
-        return [
-            {'from': CreateLeedSkies()._outputs.sky_list},
-            {'from': CreateLeedSkies()._outputs.output_folder, 'to': 'skies'}
         ]
 
     @task(
         template=PointInTimeGridEntryPoint,
-        needs=[create_rad_folder, create_skies],
-        loop=create_skies._outputs.sky_list,
+        needs=[prepare_folder],
+        loop=prepare_folder._outputs.sky_list,
         sub_folder='simulation/{{item.id}}',
-        sub_paths={'sky': '{{item.path}}'}
+        sub_paths={
+            'sky': 'skies/{{item.path}}',
+            'sensor_grids_file': 'grids_info.json',
+            'bsdfs': 'bsdf'
+        }
     )
     def illuminance_simulation(
         self,
-        model_folder=create_rad_folder._outputs.model_folder,
-        sky=create_skies._outputs.output_folder,
-        sensor_grids_file=create_rad_folder._outputs.sensor_grids_file,
-        model_sensor_grids_file=create_rad_folder._outputs.model_sensor_grids_file,
+        model_folder=prepare_folder._outputs.model_folder,
+        sky=prepare_folder._outputs.resources,
+        sensor_grids_file=prepare_folder._outputs.resources,
         grid_filter=grid_filter,
         cpu_count=cpu_count,
         min_sensor_count=min_sensor_count,
         radiance_parameters=radiance_parameters,
-        bsdfs=create_rad_folder._outputs.bsdf_folder
+        bsdfs=prepare_folder._outputs.model_folder
     ):
         # this task doesn't return a folder for each loop.
         # instead we access the results folder as a separate task
         pass
 
     @task(
-        template=LeedIlluminanceCredits, needs=[copy_model, illuminance_simulation]
+        template=LeedIlluminanceCredits,
+        needs=[prepare_folder, illuminance_simulation]
     )
     def evaluate_credits(
-        self, folder='simulation', glare_control_devices=glare_control_devices
+        self, folder=prepare_folder._outputs.simulation, glare_control_devices=glare_control_devices
     ):
         return [
             {
