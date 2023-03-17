@@ -1,6 +1,6 @@
 from pollination_dsl.dag import Inputs, DAG, task
 from dataclasses import dataclass
-from pollination.honeybee_radiance.octree import CreateOctreeWithSky
+from pollination.honeybee_radiance.octree import CreateOctreeWithSkyStatic
 from pollination.honeybee_radiance.grid import SplitGridFolder, MergeFolderData
 from pollination.honeybee_radiance.raytrace import RayTracingPointInTime
 from pollination.path.copy import Copy
@@ -57,12 +57,12 @@ class PointInTimeGridEntryPoint(DAG):
             }
         ]
 
-    @task(template=CreateOctreeWithSky)
+    @task(template=CreateOctreeWithSkyStatic)
     def create_octree(self, model=model_folder, sky=sky):
         """Create octree from radiance folder and sky."""
         return [
             {
-                'from': CreateOctreeWithSky()._outputs.scene_file,
+                'from': CreateOctreeWithSkyStatic()._outputs.scene_file,
                 'to': 'resources/scene.oct'
             }
         ]
