@@ -25,7 +25,7 @@ class LeedDaylightOptionTwoPrepareFolder(GroupedDAG):
     wea = Inputs.file(
         description='A Typical Meteorological Year (TMY) .wea file. The file '
         'must be annual with a timestep of 1 for a non-leap year.',
-        extensions=['wea'], alias=wea_input
+        extensions=['wea', 'epw'], alias=wea_input
     )
 
     north = Inputs.float(
