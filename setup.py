@@ -9,7 +9,7 @@ with open('requirements.txt') as f:
 
 # normal setuptool inputs
 setuptools.setup(
-    name='pollination-leed-daylight-option-two',                                     # will be used for package name unless it is overwritten using __queenbee__ info.
+    name='pollination-leed-daylight-option-two',                                    # will be used for package name unless it is overwritten using __queenbee__ info.
     author='pollination',                                                 # the owner account for this package - required if pushed to Pollination
     author_email='info@pollination.solutions',
     packages=setuptools.find_namespace_packages(                            # required - that's how pollination find the package
