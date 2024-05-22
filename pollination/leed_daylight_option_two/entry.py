@@ -16,6 +16,7 @@ from pollination.alias.outputs.daylight import illuminance_9am_results, \
 
 from .point_in_time._illuminance import PointInTimeGridEntryPoint
 from ._prepare_folder import LeedDaylightOptionTwoPrepareFolder
+from ._visualization import LeedDaylightOptionTwoVisualization
 
 
 @dataclass
@@ -149,6 +150,27 @@ class LeedDaylightOptionTwoEntryPoint(DAG):
                 'to': 'credit_summary.json'
             }
         ]
+
+    @task(
+        template=LeedDaylightOptionTwoVisualization,
+        needs=[prepare_folder, illuminance_simulation, evaluate_credits]
+    )
+    def create_visualization(
+        self, model=model, illuminance_9am='simulation/9AM/results',
+        illuminance_3pm='simulation/3PM/results', pass_fail_9am='results/9AM',
+        pass_fail_3pm='results/3PM', pass_fail_combined='results/combined'
+    ):
+        return [
+            {
+                'from': LeedDaylightOptionTwoVisualization()._outputs.visualization,
+                'to': 'visualization.vsf'
+            }
+        ]
+
+    visualization = Outputs.file(
+        source='visualization.vsf',
+        description='Visualization in VisualizationSet format.'
+    )
 
     illuminance_9am = Outputs.folder(
         source='simulation/9AM/results',
